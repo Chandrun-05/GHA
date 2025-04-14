@@ -1,14 +1,36 @@
-name: GitHub Advanced Security Scan (CodeQL)
+name: CodeQL Analysis
+
 on:
-  workflow_dispatch:  # Allows triggering via API
   push:
+    branches: 
+      - master
+      - main
+  pull_request:
     branches:
       - master
+      - main
+
 jobs:
-  scan:
+  analyze:
+    name: Analyze code with CodeQL
     runs-on: ubuntu-latest
     steps:
+      # Checkout the code
       - name: Checkout code
-        uses: actions/checkout@v2
-      - name: Run CodeQL Analysis
+        uses: actions/checkout@v3
+
+      # Initialize CodeQL
+      - name: Set up CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: python, javascript # Modify for your repo's languages
+
+      # Perform the CodeQL analysis
+      - name: Analyze code
         uses: github/codeql-action/analyze@v2
+
+      # Upload the results
+      - name: Upload CodeQL results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: codeql-results.sarif
