@@ -3,7 +3,7 @@ on:
   workflow_dispatch:  # Allows triggering via API
   push:
     branches:
-      - main
+      - master
 jobs:
   scan:
     runs-on: ubuntu-latest
