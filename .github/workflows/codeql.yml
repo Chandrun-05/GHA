@@ -3,12 +3,12 @@ name: CodeQL Analysis
 on:
   push:
     branches: 
-      - master
       - main
+      - master
   pull_request:
     branches:
-      - master
       - main
+      - master
 
 jobs:
   analyze:
@@ -19,18 +19,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Initialize CodeQL
+      # Initialize CodeQL (using v3)
       - name: Set up CodeQL
-        uses: github/codeql-action/init@v2
+        uses: github/codeql-action/init@v3
         with:
-          languages: python, javascript # Modify for your repo's languages
+          languages: python, javascript  # Modify as needed for your repo
 
       # Perform the CodeQL analysis
       - name: Analyze code
-        uses: github/codeql-action/analyze@v2
+        uses: github/codeql-action/analyze@v3
 
       # Upload the results
       - name: Upload CodeQL results
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: codeql-results.sarif
