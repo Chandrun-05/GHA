@@ -3,8 +3,8 @@
     <apiVersion>63.0</apiVersion>
     <areMetricsLoggedToDataCloud>false</areMetricsLoggedToDataCloud>
     <environments>Default</environments>
-    <interviewLabel>test-1 {!$Flow.CurrentDateTime}</interviewLabel>
-    <label>test-1</label>
+    <interviewLabel>test-2 {!$Flow.CurrentDateTime}</interviewLabel>
+    <label>test-2</label>
     <processMetadataValues>
         <name>BuilderType</name>
         <value>
@@ -28,7 +28,7 @@
         <locationX>50</locationX>
         <locationY>0</locationY>
         <object>Address</object>
-        <recordTriggerType>Create</recordTriggerType>
+        <recordTriggerType>Update</recordTriggerType>
         <triggerType>RecordBeforeSave</triggerType>
     </start>
     <status>InvalidDraft</status>
