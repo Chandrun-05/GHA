@@ -5,4 +5,3 @@ public class NC {
     return cs.setScale(2);
   }
 }
-
