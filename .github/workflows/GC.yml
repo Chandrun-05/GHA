@@ -52,7 +52,7 @@ jobs:
 
       - name: Set GitHub Actions Job Status
         if: env.logs == "No logs available"
-        run: echo "❌ GitCustodian Scan Failed: No logs available"
+        run: echo "GitCustodian Scan Failed No logs available"
 
       - name: Create Detailed Scan Report
         if: env.logs != "No logs available"
