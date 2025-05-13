@@ -41,6 +41,7 @@ jobs:
           else
             echo "Error: Unable to fetch logs. Exiting." >&2
             exit 1
+          fi
 
   report-scan-result:
     needs: fetch-opsera-logs
@@ -53,6 +54,7 @@ jobs:
           else
             echo "❌ GitCustodian Scan Failed: No logs available"
             exit 1
+          fi
 
       - name: Create Detailed Scan Report
         if: ${{ env.logs != 'No logs available' }}
