@@ -15,8 +15,13 @@ jobs:
           -H "Content-Type: application/json" \
           -d '{"pipelineId": "68232d25a85372e8342b3100"}')
           echo "Pipeline Response: $response"
-          run_count=$(echo $response | jq -r '.runCount')
-          echo "run_count=$run_count" >> $GITHUB_ENV
+          if echo "$response" | jq . >/dev/null 2>&1; then
+            run_count=$(echo $response | jq -r '.runCount')
+            echo "run_count=$run_count" >> $GITHUB_ENV
+          else
+            echo "Error: Invalid JSON response. Exiting." >&2
+            exit 1
+          fi
 
   monitor-opsera-scan:
     needs: trigger-opsera-scan
@@ -32,8 +37,13 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.OPSERA_API_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d '{"pipelineId": "68232d25a85372e8342b3100", "runCount": "${{ env.run_count }}"}')
-            status=$(echo $response | jq -r '.status')
-            echo "Current Status: $status"
+            if echo "$response" | jq . >/dev/null 2>&1; then
+              status=$(echo $response | jq -r '.status // "unknown"')
+              echo "Current Status: $status"
+            else
+              echo "Error: Invalid JSON response during status check. Exiting." >&2
+              exit 1
+            fi
           done
           echo "final_status=$status" >> $GITHUB_ENV
 
