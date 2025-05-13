@@ -7,6 +7,8 @@ on:
 jobs:
   trigger-opsera-scan:
     runs-on: ubuntu-latest
+    outputs:
+      run_count: ${{ steps.trigger_scan.outputs.run_count }}
     steps:
       - name: Trigger GitCustodian Scan in Opsera
         id: trigger_scan
@@ -15,11 +17,12 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.OPSERA_API_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d '{"pipelineId": "68232d25a85372e8342b3100"}')
-          
+
           echo "Pipeline Response: $response"
+
           if echo "$response" | jq . >/dev/null 2>&1; then
             run_count=$(echo "$response" | jq -r '.runCount')
-            echo "run_count=$run_count" >> $GITHUB_ENV
+            echo "run_count=$run_count" >> $GITHUB_OUTPUT
           else
             echo "Error: Invalid JSON response. Exiting." >&2
             exit 1
@@ -28,18 +31,23 @@ jobs:
   fetch-opsera-logs:
     needs: trigger-opsera-scan
     runs-on: ubuntu-latest
+    outputs:
+      logs: ${{ steps.fetch_logs.outputs.logs }}
     steps:
       - name: Fetch Opsera Scan Logs
         id: fetch_logs
         run: |
+          run_count="${{ needs.trigger-opsera-scan.outputs.run_count }}"
           response=$(curl -s -X POST "https://app.opsera.io/api/v1/pipeline/logs" \
             -H "Authorization: Bearer ${{ secrets.OPSERA_API_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d '{"pipelineId": "68232d25a85372e8342b3100", "runCount": "${{ env.run_count }}"}')
-          
+            -d "{\"pipelineId\": \"68232d25a85372e8342b3100\", \"runCount\": \"$run_count\"}")
+
+          echo "Log Response: $response"
+
           if echo "$response" | jq . >/dev/null 2>&1; then
-            logs=$(echo "$response" | jq -c '.logs // "No logs available"')
-            echo "logs=$logs" >> $GITHUB_ENV
+            logs=$(echo "$response" | jq -c '.logs // []')
+            echo "logs=$logs" >> $GITHUB_OUTPUT
           else
             echo "Error: Unable to fetch logs. Exiting." >&2
             exit 1
@@ -49,31 +57,22 @@ jobs:
     needs: fetch-opsera-logs
     runs-on: ubuntu-latest
     steps:
-      - name: Check if logs are available
-        run: |
-          if [ "${{ env.logs }}" == "No logs available" ]; then
-            echo "❌ GitCustodian Scan Failed: No logs available"
-            exit 1
-          else
-            echo "✅ GitCustodian Scan Completed"
-          fi
-
-      - name: Save logs to file
-        run: |
-          echo '${{ env.logs }}' > gitscan-output.json
-
       - name: Create Detailed Scan Report
         run: |
+          logs='${{ needs.fetch-opsera-logs.outputs.logs }}'
+
+          if [ "$logs" = "[]" ]; then
+            echo "❌ GitCustodian Scan Failed: No logs available"
+            exit 1
+          fi
+
+          echo "✅ GitCustodian Scan Completed"
           echo "### GitCustodian Scan Report" > scan-report.md
           echo "Pipeline ID: $GITHUB_RUN_ID" >> scan-report.md
           echo "Scan Status: Completed" >> scan-report.md
-          echo "#### Detected Secrets:" >> scan-report.md
+          echo "#### Scan Issues:" >> scan-report.md
 
-          jq -r '
-            map(select(.tool_identifier == "consumer.summary"))[0]
-            | .api_response.summaryReport.report[]
-            | "- File: \(.path)\n  Line: \(.lineNumber)\n  Reason: \(.reason)\n  Commit: \(.commit)\n  Author: \(.author)\n"
-          ' gitscan-output.json >> scan-report.md
+          echo "$logs" | jq -r '.[] | "- Author: \(.Author)\n  Commit: \(.Commit)\n  CommitHash: \(.CommitHash)\n  Path: \(.Path)\n  LineNumber: \(.LineNumber)\n  Link: \(.Link)\n  Reason: \(.Reason)\n  Severity: \(.Severity)\n  IssueStatus: \(.IssueStatus)\n"' >> scan-report.md
 
           echo "#### End of Report" >> scan-report.md
 
@@ -81,19 +80,29 @@ jobs:
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
+          git fetch
+          git checkout ${{ github.head_ref || github.ref_name }}
           git add scan-report.md
-          git commit -m "Add GitCustodian scan report"
+          git commit -m "Add detailed GitCustodian scan report"
           git push
 
   comment-scan-result:
     needs: fetch-opsera-logs
-    runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
     steps:
-      - name: Post scan result comment on PR
+      - name: Comment on GitHub Pull Request
         run: |
+          logs='${{ needs.fetch-opsera-logs.outputs.logs }}'
+
+          if [ "$logs" = "[]" ]; then
+            comment_body="❌ GitCustodian Scan Failed: No logs available"
+          else
+            comment_body="✅ GitCustodian Scan Completed.\n\n<details><summary>Click to expand logs</summary>\n\n\`\`\`json\n$logs\n\`\`\`\n</details>"
+          fi
+
           curl -s -X POST \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d "{\"body\": \"🔍 GitCustodian Scan Completed.\n\nView the full scan report in \`scan-report.md\`. ✅\"}" \
-            "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.number }}/comments"
+            -d "{\"body\": \"$comment_body\"}" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
