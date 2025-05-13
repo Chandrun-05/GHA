@@ -21,7 +21,7 @@ jobs:
           else
             echo "Error: Invalid JSON response. Exiting." >&2
             exit 1
-          
+
   fetch-opsera-logs:
     needs: trigger-opsera-scan
     runs-on: ubuntu-latest
@@ -40,7 +40,7 @@ jobs:
           else
             echo "Error: Unable to fetch logs. Exiting." >&2
             exit 1
-          
+
   report-scan-result:
     needs: fetch-opsera-logs
     runs-on: ubuntu-latest
@@ -52,7 +52,6 @@ jobs:
           else
             echo "❌ GitCustodian Scan Failed: No logs available"
             exit 1
-          fi
 
       - name: Create Detailed Scan Report
         if: ${{ env.logs != 'No logs available' }}
