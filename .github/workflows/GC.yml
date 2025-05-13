@@ -27,40 +27,27 @@ jobs:
           status="running"
           while [ "$status" == "running" ] || [ "$status" == "queued" ]; do
             sleep 30
-            response=$(curl -s -X GET "https://your-opsera-url.com/api/pipelines/status/${{ env.pipeline_id }}" \
+            response=$(curl -s -X GET "https://app.opsera.io/api/v1/pipeline/status/${{ env.pipeline_id }}" \
             -H "Authorization: Bearer ${{ secrets.OPSERA_API_TOKEN }}")
             status=$(echo $response | jq -r '.status')
             echo "Current Status: $status"
           done
           echo "final_status=$status" >> $GITHUB_ENV
 
-  fetch-opsera-scan-result:
+  report-scan-result:
     needs: monitor-opsera-scan
     runs-on: ubuntu-latest
     steps:
-      - name: Get GitCustodian Scan Result
-        id: get_result
-        run: |
-          response=$(curl -s -X GET "https://your-opsera-url.com/api/pipelines/result/${{ env.pipeline_id }}" \
-          -H "Authorization: Bearer ${{ secrets.OPSERA_API_TOKEN }}")
-          result=$(echo $response | jq -r '.result')
-          echo "GitCustodian Result: $result"
-          echo "scan_result=$result" >> $GITHUB_ENV
-
-  report-scan-result:
-    needs: fetch-opsera-scan-result
-    runs-on: ubuntu-latest
-    steps:
       - name: Set GitHub Actions Job Status
-        if: env.scan_result == 'pass'
+        if: env.final_status == 'success'
         run: echo "✅ GitCustodian Scan Passed"
 
       - name: Set GitHub Actions Job Status
-        if: env.scan_result != 'pass'
+        if: env.final_status != 'success'
         run: echo "❌ GitCustodian Scan Failed"
 
   comment-scan-result:
-    needs: fetch-opsera-scan-result
+    needs: monitor-opsera-scan
     runs-on: ubuntu-latest
     steps:
       - name: Comment on GitHub Pull Request
@@ -69,5 +56,5 @@ jobs:
           curl -s -X POST \
           -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
           -H "Content-Type: application/json" \
-          -d '{"body": "GitCustodian Scan Result: ${{ env.scan_result }}"}' \
+          -d '{"body": "GitCustodian Scan Result: ${{ env.final_status }}"}' \
           "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.number }}/comments"
