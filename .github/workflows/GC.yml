@@ -2,6 +2,7 @@ name: Trigger Opsera GitCustodian Scan and Report to GitHub
 
 on:
   workflow_dispatch:
+  pull_request:
 
 jobs:
   trigger-opsera-scan:
@@ -16,7 +17,7 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.OPSERA_API_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d '{"pipelineId": "68232d25a85372e8342b3100"}')
-          
+
           echo "Pipeline Response: $response"
 
           if echo "$response" | jq . >/dev/null 2>&1; then
@@ -45,7 +46,7 @@ jobs:
           echo "Log Response: $response"
 
           if echo "$response" | jq . >/dev/null 2>&1; then
-            logs=$(echo "$response" | jq -c '.')
+            logs=$(echo "$response" | jq -c '. // []')
             echo "logs=$logs" >> $GITHUB_OUTPUT
           else
             echo "Error: Unable to fetch logs. Exiting." >&2
@@ -64,13 +65,13 @@ jobs:
           echo "Pipeline ID: $GITHUB_RUN_ID" >> scan-report.md
           echo "Scan Status: Completed" >> scan-report.md
           echo "" >> scan-report.md
-          echo "#### Issues Found:" >> scan-report.md
+          echo "#### Pipeline Events:" >> scan-report.md
 
           echo "$logs" | jq -r '.[] | 
-            "- Author: \(.step_configuration.tool.configuration.gitCommitId)  
-              Commit: \(.message)  
-              Status: \(.status)  
-              Timestamp: \(.createdAt)"' >> scan-report.md
+            "- Message: \(.message // "N/A")
+               Status: \(.status // "N/A")
+               Timestamp: \(.createdAt // "N/A")
+               Commit ID: \(.step_configuration.plan[0].tool.configuration.gitCommitId // "N/A")"' >> scan-report.md
 
           echo "" >> scan-report.md
           echo "#### End of Report" >> scan-report.md
@@ -79,8 +80,11 @@ jobs:
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
+          git fetch origin
+          git checkout ${{ github.head_ref || github.ref_name }}
+          git pull
           git add scan-report.md
-          git commit -m "Add GitCustodian scan report"
+          git commit -m "Add GitCustodian scan report" || echo "No changes to commit"
           git push
 
   comment-scan-result:
@@ -91,11 +95,9 @@ jobs:
       - name: Comment on GitHub Pull Request
         run: |
           logs='${{ needs.fetch-opsera-logs.outputs.logs }}'
-          message="### 🔍 GitCustodian Scan Result\n\n#### Logs (summary):\n\n"
-          message+=$(echo "$logs" | jq -r '.[0] | "- Commit: \(.message)\n  Status: \(.status)\n  Time: \(.createdAt)"')
-          
+          comment="### 🛡️ GitCustodian Scan Completed\n\n\`\`\`json\n$logs\n\`\`\`"
           curl -s -X POST \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d "$(jq -nc --arg body "$message" '{body: $body}')" \
-            "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.number }}/comments"
+            -d "{\"body\": \"$comment\"}" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
