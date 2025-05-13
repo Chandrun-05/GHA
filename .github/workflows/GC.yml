@@ -10,7 +10,7 @@ jobs:
       - name: Trigger GitCustodian Scan in Opsera
         id: trigger_scan
         run: |
-          response=$(curl -s -X POST "https://portal.opsera.io/api/pipelines/trigger" \
+          response=$(curl -s -X POST "https://app.opsera.io/api/v1/pipeline/run" \
           -H "Authorization: Bearer ${{ secrets.OPSERA_API_TOKEN }}" \
           -H "Content-Type: application/json" \
           -d '{"pipelineId": "68232d25a85372e8342b3100"}')
