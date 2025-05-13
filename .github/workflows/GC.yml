@@ -47,15 +47,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set GitHub Actions Job Status
-        if: env.logs != "No logs available"
+        if: ${{ env.logs != 'No logs available' }}
         run: echo "✅ GitCustodian Scan Completed"
 
       - name: Set GitHub Actions Job Status
-        if: env.logs == "No logs available"
-        run: echo "GitCustodian Scan Failed No logs available"
+        if: ${{ env.logs == 'No logs available' }}
+        run: echo "❌ GitCustodian Scan Failed: No logs available"
 
       - name: Create Detailed Scan Report
-        if: env.logs != "No logs available"
+        if: ${{ env.logs != 'No logs available' }}
         run: |
           echo "### GitCustodian Scan Report" > scan-report.md
           echo "Pipeline ID: $GITHUB_RUN_ID" >> scan-report.md
@@ -68,7 +68,7 @@ jobs:
           echo "#### End of Report" >> scan-report.md
 
       - name: Commit the Scan Report
-        if: env.logs != "No logs available"
+        if: ${{ env.logs != 'No logs available' }}
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
