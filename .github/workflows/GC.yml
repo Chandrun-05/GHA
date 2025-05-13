@@ -21,6 +21,7 @@ jobs:
           else
             echo "Error: Invalid JSON response. Exiting." >&2
             exit 1
+          fi
 
   fetch-opsera-logs:
     needs: trigger-opsera-scan
