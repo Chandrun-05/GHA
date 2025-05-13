@@ -46,12 +46,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set GitHub Actions Job Status
-        if: ${{ env.logs != 'No logs available' }}
-        run: echo "✅ GitCustodian Scan Completed"
-      
-      - name: Set GitHub Actions Job Status
-        if: ${{ env.logs == 'No logs available' }}
-        run: echo "❌ GitCustodian Scan Failed: No logs available"
+        run: |
+          if [ "${{ env.logs }}" != "No logs available" ]; then
+            echo "✅ GitCustodian Scan Completed"
+          else
+            echo "❌ GitCustodian Scan Failed: No logs available"
+            exit 1
+          fi
 
       - name: Create Detailed Scan Report
         if: ${{ env.logs != 'No logs available' }}
