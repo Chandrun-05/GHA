@@ -21,13 +21,13 @@ jobs:
           else
             echo "Error: Invalid JSON response. Exiting." >&2
             exit 1
-          fi
-
+          
   fetch-opsera-logs:
     needs: trigger-opsera-scan
     runs-on: ubuntu-latest
     steps:
       - name: Fetch Opsera Scan Logs
+        id: fetch_logs
         run: |
           response=$(curl -s -X POST "https://app.opsera.io/api/v1/pipeline/logs" \
           -H "Authorization: Bearer ${{ secrets.OPSERA_API_TOKEN }}" \
@@ -40,8 +40,7 @@ jobs:
           else
             echo "Error: Unable to fetch logs. Exiting." >&2
             exit 1
-          fi
-
+          
   report-scan-result:
     needs: fetch-opsera-logs
     runs-on: ubuntu-latest
@@ -49,7 +48,7 @@ jobs:
       - name: Set GitHub Actions Job Status
         if: ${{ env.logs != 'No logs available' }}
         run: echo "✅ GitCustodian Scan Completed"
-
+      
       - name: Set GitHub Actions Job Status
         if: ${{ env.logs == 'No logs available' }}
         run: echo "❌ GitCustodian Scan Failed: No logs available"
@@ -64,7 +63,6 @@ jobs:
           # Extract and include detailed error information from logs
           echo "#### Scan Issues:" >> scan-report.md
           echo "${{ env.logs }}" | jq -r '.[] | "\(.Author) \t \(.Commit) \t \(.CommitHash) \t \(.Path) \t \(.LineNumber) \t \(.Link) \t \(.Reason) \t \(.Severity) \t \(.IssueStatus)"' >> scan-report.md
-
           echo "#### End of Report" >> scan-report.md
 
       - name: Commit the Scan Report
