@@ -1,0 +1,73 @@
+name: Trigger Opsera GitCustodian Scan and Report to GitHub
+
+on:
+  workflow_dispatch:
+
+jobs:
+  trigger-opsera-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger GitCustodian Scan in Opsera
+        id: trigger_scan
+        run: |
+          response=$(curl -s -X POST "https://your-opsera-url.com/api/pipelines/trigger" \
+          -H "Authorization: Bearer ${{ secrets.OPSERA_API_TOKEN }}" \
+          -H "Content-Type: application/json" \
+          -d '{"pipelineId": "68232d25a85372e8342b3100"}')
+          echo "Pipeline Response: $response"
+          echo "pipeline_id=$(echo $response | jq -r '.pipeline_id')" >> $GITHUB_ENV
+
+  monitor-opsera-scan:
+    needs: trigger-opsera-scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Opsera Scan Completion
+        id: check_status
+        run: |
+          status="running"
+          while [ "$status" == "running" ] || [ "$status" == "queued" ]; do
+            sleep 30
+            response=$(curl -s -X GET "https://your-opsera-url.com/api/pipelines/status/${{ env.pipeline_id }}" \
+            -H "Authorization: Bearer ${{ secrets.OPSERA_API_TOKEN }}")
+            status=$(echo $response | jq -r '.status')
+            echo "Current Status: $status"
+          done
+          echo "final_status=$status" >> $GITHUB_ENV
+
+  fetch-opsera-scan-result:
+    needs: monitor-opsera-scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get GitCustodian Scan Result
+        id: get_result
+        run: |
+          response=$(curl -s -X GET "https://your-opsera-url.com/api/pipelines/result/${{ env.pipeline_id }}" \
+          -H "Authorization: Bearer ${{ secrets.OPSERA_API_TOKEN }}")
+          result=$(echo $response | jq -r '.result')
+          echo "GitCustodian Result: $result"
+          echo "scan_result=$result" >> $GITHUB_ENV
+
+  report-scan-result:
+    needs: fetch-opsera-scan-result
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set GitHub Actions Job Status
+        if: env.scan_result == 'pass'
+        run: echo "✅ GitCustodian Scan Passed"
+
+      - name: Set GitHub Actions Job Status
+        if: env.scan_result != 'pass'
+        run: echo "❌ GitCustodian Scan Failed"
+
+  comment-scan-result:
+    needs: fetch-opsera-scan-result
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment on GitHub Pull Request
+        if: github.event_name == 'pull_request'
+        run: |
+          curl -s -X POST \
+          -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          -H "Content-Type: application/json" \
+          -d '{"body": "GitCustodian Scan Result: ${{ env.scan_result }}"}' \
+          "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.number }}/comments"
