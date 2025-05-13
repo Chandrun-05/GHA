@@ -2,7 +2,6 @@ name: Trigger Opsera GitCustodian Scan and Report to GitHub
 
 on:
   workflow_dispatch:
-  pull_request:
 
 jobs:
   trigger-opsera-scan:
@@ -17,7 +16,7 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.OPSERA_API_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d '{"pipelineId": "68232d25a85372e8342b3100"}')
-
+          
           echo "Pipeline Response: $response"
 
           if echo "$response" | jq . >/dev/null 2>&1; then
@@ -42,11 +41,11 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.OPSERA_API_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d "{\"pipelineId\": \"68232d25a85372e8342b3100\", \"runCount\": \"$run_count\"}")
-
+          
           echo "Log Response: $response"
 
           if echo "$response" | jq . >/dev/null 2>&1; then
-            logs=$(echo "$response" | jq -c '.logs // []')
+            logs=$(echo "$response" | jq -c '.')
             echo "logs=$logs" >> $GITHUB_OUTPUT
           else
             echo "Error: Unable to fetch logs. Exiting." >&2
@@ -57,52 +56,46 @@ jobs:
     needs: fetch-opsera-logs
     runs-on: ubuntu-latest
     steps:
-      - name: Create Detailed Scan Report
+      - name: Generate Scan Report
         run: |
           logs='${{ needs.fetch-opsera-logs.outputs.logs }}'
 
-          if [ "$logs" = "[]" ]; then
-            echo "❌ GitCustodian Scan Failed: No logs available"
-            exit 1
-          fi
-
-          echo "✅ GitCustodian Scan Completed"
           echo "### GitCustodian Scan Report" > scan-report.md
           echo "Pipeline ID: $GITHUB_RUN_ID" >> scan-report.md
           echo "Scan Status: Completed" >> scan-report.md
-          echo "#### Scan Issues:" >> scan-report.md
+          echo "" >> scan-report.md
+          echo "#### Issues Found:" >> scan-report.md
 
-          echo "$logs" | jq -r '.[] | "- Author: \(.Author)\n  Commit: \(.Commit)\n  CommitHash: \(.CommitHash)\n  Path: \(.Path)\n  LineNumber: \(.LineNumber)\n  Link: \(.Link)\n  Reason: \(.Reason)\n  Severity: \(.Severity)\n  IssueStatus: \(.IssueStatus)\n"' >> scan-report.md
+          echo "$logs" | jq -r '.[] | 
+            "- Author: \(.step_configuration.tool.configuration.gitCommitId)  
+              Commit: \(.message)  
+              Status: \(.status)  
+              Timestamp: \(.createdAt)"' >> scan-report.md
 
+          echo "" >> scan-report.md
           echo "#### End of Report" >> scan-report.md
 
       - name: Commit the Scan Report
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          git fetch
-          git checkout ${{ github.head_ref || github.ref_name }}
           git add scan-report.md
-          git commit -m "Add detailed GitCustodian scan report"
+          git commit -m "Add GitCustodian scan report"
           git push
 
   comment-scan-result:
-    needs: fetch-opsera-logs
     if: github.event_name == 'pull_request'
+    needs: fetch-opsera-logs
     runs-on: ubuntu-latest
     steps:
       - name: Comment on GitHub Pull Request
         run: |
           logs='${{ needs.fetch-opsera-logs.outputs.logs }}'
-
-          if [ "$logs" = "[]" ]; then
-            comment_body="❌ GitCustodian Scan Failed: No logs available"
-          else
-            comment_body="✅ GitCustodian Scan Completed.\n\n<details><summary>Click to expand logs</summary>\n\n\`\`\`json\n$logs\n\`\`\`\n</details>"
-          fi
-
+          message="### 🔍 GitCustodian Scan Result\n\n#### Logs (summary):\n\n"
+          message+=$(echo "$logs" | jq -r '.[0] | "- Commit: \(.message)\n  Status: \(.status)\n  Time: \(.createdAt)"')
+          
           curl -s -X POST \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d "{\"body\": \"$comment_body\"}" \
-            "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
+            -d "$(jq -nc --arg body "$message" '{body: $body}')" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.number }}/comments"
