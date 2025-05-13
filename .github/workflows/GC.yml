@@ -15,7 +15,8 @@ jobs:
           -H "Content-Type: application/json" \
           -d '{"pipelineId": "68232d25a85372e8342b3100"}')
           echo "Pipeline Response: $response"
-          echo "pipeline_id=$(echo $response | jq -r '.pipeline_id')" >> $GITHUB_ENV
+          run_count=$(echo $response | jq -r '.runCount')
+          echo "run_count=$run_count" >> $GITHUB_ENV
 
   monitor-opsera-scan:
     needs: trigger-opsera-scan
@@ -27,8 +28,10 @@ jobs:
           status="running"
           while [ "$status" == "running" ] || [ "$status" == "queued" ]; do
             sleep 30
-            response=$(curl -s -X GET "https://app.opsera.io/api/v1/pipeline/status/${{ env.pipeline_id }}" \
-            -H "Authorization: Bearer ${{ secrets.OPSERA_API_TOKEN }}")
+            response=$(curl -s -X POST "https://app.opsera.io/api/v1/pipeline/status" \
+            -H "Authorization: Bearer ${{ secrets.OPSERA_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"pipelineId": "68232d25a85372e8342b3100", "runCount": "${{ env.run_count }}"}')
             status=$(echo $response | jq -r '.status')
             echo "Current Status: $status"
           done
