@@ -2,7 +2,6 @@ name: Trigger Opsera GitCustodian Scan and Report to GitHub
 
 on:
   workflow_dispatch:
-  pull_request:
 
 jobs:
   trigger-opsera-scan:
@@ -42,7 +41,7 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.OPSERA_API_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d "{\"pipelineId\": \"68232d25a85372e8342b3100\", \"runCount\": \"$run_count\"}")
-          
+
           echo "Log Response: $response"
 
           if echo "$response" | jq . >/dev/null 2>&1; then
@@ -57,7 +56,10 @@ jobs:
     needs: fetch-opsera-logs
     runs-on: ubuntu-latest
     steps:
-      - name: Generate Scan Report
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create GitCustodian Scan Report
         run: |
           logs='${{ needs.fetch-opsera-logs.outputs.logs }}'
 
@@ -65,39 +67,39 @@ jobs:
           echo "Pipeline ID: $GITHUB_RUN_ID" >> scan-report.md
           echo "Scan Status: Completed" >> scan-report.md
           echo "" >> scan-report.md
-          echo "#### Pipeline Events:" >> scan-report.md
+
+          echo "#### Scan Entries:" >> scan-report.md
 
           echo "$logs" | jq -r '.[] | 
-            "- Message: \(.message // "N/A")
-               Status: \(.status // "N/A")
-               Timestamp: \(.createdAt // "N/A")
-               Commit ID: \(.step_configuration.plan[0].tool.configuration.gitCommitId // "N/A")"' >> scan-report.md
+            "- Message: \(.message)
+              - Status: \(.status)
+              - Action: \(.action)
+              - Created At: \(.createdAt)
+              - Updated At: \(.updatedAt)"' >> scan-report.md
 
           echo "" >> scan-report.md
           echo "#### End of Report" >> scan-report.md
 
-      - name: Commit the Scan Report
+      - name: Commit and Push Report
         run: |
-          git config --global user.name "Chandrun-05"
-          git config --global user.email "chandru.nallasivam@opsera.io"
-          git fetch origin
-          git checkout ${{ github.head_ref || github.ref_name }}
-          git pull
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git pull origin ${{ github.head_ref || github.ref_name }}
           git add scan-report.md
           git commit -m "Add GitCustodian scan report" || echo "No changes to commit"
-          git push
+          git push origin HEAD:${{ github.head_ref || github.ref_name }}
 
   comment-scan-result:
-    if: github.event_name == 'pull_request'
     needs: fetch-opsera-logs
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Comment on GitHub Pull Request
         run: |
           logs='${{ needs.fetch-opsera-logs.outputs.logs }}'
-          comment="### 🛡️ GitCustodian Scan Completed\n\n\`\`\`json\n$logs\n\`\`\`"
+          body=$(echo "$logs" | jq -r '.[] | "- Message: \(.message)\n  - Status: \(.status)\n  - Action: \(.action)"')
           curl -s -X POST \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d "{\"body\": \"$comment\"}" \
-            "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
+            -d "{\"body\": \"### GitCustodian Scan Summary\n\n$body\"}" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.number }}/comments"
