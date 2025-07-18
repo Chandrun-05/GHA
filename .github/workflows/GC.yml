@@ -57,7 +57,7 @@ jobs:
           echo "# GitCustodian Scan Report" > scan-report.md
           echo "" >> scan-report.md
           echo "## Pipeline Log Entry" >> scan-report.md
-          echo "${{ needs.fetch-opsera-logs.outputs.logs }}" | jq -r '.[] | 
+          echo '${{ needs.fetch-opsera-logs.outputs.logs }}' | jq -r '.[] |
 "- **Pipeline ID**: \(.pipeline_id)
 - **Run Count**: \(.run_count)
 - **User ID**: \(.user_id)
