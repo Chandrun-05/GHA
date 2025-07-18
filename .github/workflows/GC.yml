@@ -54,12 +54,10 @@ jobs:
     steps:
       - name: Create GitCustodian Scan Report
         run: |
-          logs='${{ needs.fetch-opsera-logs.outputs.logs }}'
-          cat <<EOF > scan-report.md
-# GitCustodian Scan Report
-
-## Pipeline Log Entry
-$(echo "$logs" | jq -r '.[] |
+          echo "# GitCustodian Scan Report" > scan-report.md
+          echo "" >> scan-report.md
+          echo "## Pipeline Log Entry" >> scan-report.md
+          echo "${{ needs.fetch-opsera-logs.outputs.logs }}" | jq -r '.[] | 
 "- **Pipeline ID**: \(.pipeline_id)
 - **Run Count**: \(.run_count)
 - **User ID**: \(.user_id)
@@ -74,16 +72,16 @@ $(echo "$logs" | jq -r '.[] |
 ### Step Configuration
 - **Tool**: \(.step_configuration.tool)
 \(.step_configuration.plan[] |
-  "  - **Plan Name**: \(.name)
+  \"  - **Plan Name**: \(.name)
   - **Description**: \(.description)
     - **Tool Identifier**: \(.tool.tool_identifier)
     - **Configuration**:
-\(.tool.configuration | to_entries[] | "      - **\(.key)**: \(.value)")
+\(.tool.configuration | to_entries[] | \"      - **\(.key)**: \(.value)\")
     - **Threshold Type**: \(.tool.threshold.type)
     - **Threshold Value**: \(.tool.threshold.value)
     - **Job**: \(.tool.job)
   - **Trigger**: \(.trigger)
-  - **Type**: \(.type | join(", "))
+  - **Type**: \(.type | join(\", \"))
   - **Orchestration Type**: \(.orchestration_type)
   - **Notification**: \(.notification)
   - **Active**: \(.active)
@@ -91,8 +89,7 @@ $(echo "$logs" | jq -r '.[] |
   - **Plan ID**: \(.["_id"])
   - **Dependencies**: \(.dependencies)
   - **Tags**:
-\(.tags[] | "    - Type: \(.type), Value: \(.value)")")")
-EOF
+\(.tags[] | \"    - Type: \(.type), Value: \(.value)\")\")" >> scan-report.md
 
       - name: Commit and Push Report
         env:
