@@ -55,19 +55,42 @@ jobs:
       - name: Create GitCustodian Scan Report
         run: |
           logs='${{ needs.fetch-opsera-logs.outputs.logs }}'
-          echo "### GitCustodian Scan Report" > scan-report.md
-          echo "Pipeline ID: $GITHUB_RUN_ID" >> scan-report.md
-          echo "Scan Status: Completed" >> scan-report.md
+          echo "# GitCustodian Scan Report" > scan-report.md
           echo "" >> scan-report.md
-          echo "#### Scan Entries:" >> scan-report.md
+          echo "## Pipeline Log Entry" >> scan-report.md
           echo "$logs" | jq -r '.[] | 
-            "- Message: \(.message)
-              - Status: \(.status)
-              - Action: \(.action)
-              - Created At: \(.createdAt)
-              - Updated At: \(.updatedAt)"' >> scan-report.md
-          echo "" >> scan-report.md
-          echo "#### End of Report" >> scan-report.md
+            "- **Pipeline ID**: \(.pipeline_id)
+- **Run Count**: \(.run_count)
+- **User ID**: \(.user_id)
+- **Tool Identifier**: \(.tool_identifier)
+- **Step Name**: \(.step_name)
+- **Status**: \(.status)
+- **Action**: \(.action)
+- **Message**: \(.message)
+- **Created At**: \(.createdAt)
+- **Updated At**: \(.updatedAt)
+
+### Step Configuration
+- **Tool**: \(.step_configuration.tool)
+\(.step_configuration.plan[] | 
+  "  - **Plan Name**: \(.name)
+  - **Description**: \(.description)
+    - **Tool Identifier**: \(.tool.tool_identifier)
+    - **Configuration**:
+\(.tool.configuration | to_entries[] | "      - **\(.key)**: \(.value)")
+    - **Threshold Type**: \(.tool.threshold.type)
+    - **Threshold Value**: \(.tool.threshold.value)
+    - **Job**: \(.tool.job)
+  - **Trigger**: \(.trigger)
+  - **Type**: \(.type | join(", "))
+  - **Orchestration Type**: \(.orchestration_type)
+  - **Notification**: \(.notification)
+  - **Active**: \(.active)
+  - **Updated At**: \(.updatedAt)
+  - **Plan ID**: \(.["_id"])
+  - **Dependencies**: \(.dependencies)
+  - **Tags**:
+\(.tags[] | "    - Type: \(.type), Value: \(.value)")")' >> scan-report.md
 
       - name: Commit and Push Report
         env:
