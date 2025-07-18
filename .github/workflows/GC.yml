@@ -1,122 +1,93 @@
 name: Trigger Opsera GitCustodian Scan and Report to GitHub
-
-on:
-  workflow_dispatch:
-
+'on':
+  workflow_dispatch: {}
 jobs:
   trigger-opsera-scan:
     runs-on: ubuntu-latest
     outputs:
-      run_count: ${{{{ steps.trigger_scan.outputs.run_count }}}}
+      run_count: ${{ steps.trigger_scan.outputs.run_count }}
     steps:
-      - name: Trigger GitCustodian Scan in Opsera
-        id: trigger_scan
-        run: |
-          response=$(curl -s -X POST "https://app.opsera.io/api/v1/pipeline/run" \
-            -H "Authorization: Bearer ${{{{ secrets.OPSERA_API_TOKEN }}}}" \
-            -H "Content-Type: application/json" \
-            -d '{{"pipelineId": "68232d25a85372e8342b3100"}}')
-          echo "Pipeline Response: $response"
-          if echo "$response" | jq . >/dev/null 2>&1; then
-            run_count=$(echo "$response" | jq -r '.runCount')
-            echo "run_count=$run_count" >> $GITHUB_OUTPUT
-          else
-            echo "Error: Invalid JSON response. Exiting." >&2
-            exit 1
-          fi
-
+    - name: Trigger GitCustodian Scan in Opsera
+      id: trigger_scan
+      run: "response=$(curl -s -X POST \"https://app.opsera.io/api/v1/pipeline/run\"\
+        \ -H \"Authorization: Bearer ${{ secrets.OPSERA_API_TOKEN }}\" -H \"Content-Type:\
+        \ application/json\" -d '{\"pipelineId\": \"68232d25a85372e8342b3100\"}')\n\
+        echo \"Pipeline Response: $response\"\nif echo \"$response\" | jq . >/dev/null\
+        \ 2>&1; then\n  run_count=$(echo \"$response\" | jq -r '.runCount')\n  echo\
+        \ \"run_count=$run_count\" >> $GITHUB_OUTPUT\nelse\n  echo \"Error: Invalid\
+        \ JSON response. Exiting.\" >&2\n  exit 1\nfi"
   fetch-opsera-logs:
     needs: trigger-opsera-scan
     runs-on: ubuntu-latest
     outputs:
-      logs: ${{{{ steps.fetch_logs.outputs.logs }}}}
+      logs: ${{ steps.fetch_logs.outputs.logs }}
     steps:
-      - name: Fetch Opsera Scan Logs
-        id: fetch_logs
-        run: |
-          run_count="${{{{ needs.trigger-opsera-scan.outputs.run_count }}}}"
-          response=$(curl -s -X POST "https://app.opsera.io/api/v1/pipeline/logs" \
-            -H "Authorization: Bearer ${{{{ secrets.OPSERA_API_TOKEN }}}}" \
-            -H "Content-Type: application/json" \
-            -d "{{\"pipelineId\": \"68232d25a85372e8342b3100\", \"runCount\": \"$run_count\"}}")
-          echo "Log Response: $response"
-          if echo "$response" | jq . >/dev/null 2>&1; then
-            logs=$(echo "$response" | jq -c '. // []')
-            echo "logs=$logs" >> $GITHUB_OUTPUT
-          else
-            echo "Error: Unable to fetch logs. Exiting." >&2
-            exit 1
-          fi
-
+    - name: Fetch Opsera Scan Logs
+      id: fetch_logs
+      run: "run_count=\"${{ needs.trigger-opsera-scan.outputs.run_count }}\"\nresponse=$(curl\
+        \ -s -X POST \"https://app.opsera.io/api/v1/pipeline/logs\" -H \"Authorization:\
+        \ Bearer ${{ secrets.OPSERA_API_TOKEN }}\" -H \"Content-Type: application/json\"\
+        \ -d \"{\\\"pipelineId\\\": \\\"68232d25a85372e8342b3100\\\", \\\"runCount\\\
+        \": \\\"$run_count\\\"}\")\necho \"Log Response: $response\"\nif echo \"$response\"\
+        \ | jq . >/dev/null 2>&1; then\n  logs=$(echo \"$response\" | jq -c '. //\
+        \ []')\n  echo \"logs=$logs\" >> $GITHUB_OUTPUT\nelse\n  echo \"Error: Unable\
+        \ to fetch logs. Exiting.\" >&2\n  exit 1\nfi"
   report-scan-result:
     needs: fetch-opsera-logs
     runs-on: ubuntu-latest
     steps:
-      - name: Create GitCustodian Scan Report
-        run: |
-          echo "# GitCustodian Scan Report" > scan-report.md
-          echo "" >> scan-report.md
-          echo "## Pipeline Log Entry" >> scan-report.md
+    - name: Create GitCustodian Scan Report
+      run: "echo \"# GitCustodian Scan Report\" > scan-report.md\necho \"\" >> scan-report.md\n\
+        echo \"## Pipeline Log Entry\" >> scan-report.md\nlogs='${{ needs.fetch-opsera-logs.outputs.logs\
+        \ }}'\necho \"$logs\" | jq -r '.[] | \"- **Pipeline ID**: \\(.pipeline_id)\n\
+        - **Run Count**: \\(.run_count)\n- **User ID**: \\(.user_id)\n- **Tool Identifier**:\
+        \ \\(.tool_identifier)\n- **Step Name**: \\(.step_name)\n- **Status**: \\\
+        (.status)\n- **Action**: \\(.action)\n- **Message**: \\(.message)\n- **Created\
+        \ At**: \\(.createdAt)\n- **Updated At**: \\(.updatedAt)\n### Step Configuration\n\
+        - **Tool**: \\(.step_configuration.tool)\n\\(.step_configuration.plan[] |\
+        \ \"  - **Plan Name**: \\(.name)\n  - **Description**: \\(.description)\n\
+        \    - **Tool Identifier**: \\(.tool.tool_identifier)\n    - **Configuration**:\n\
+        \\(.tool.configuration | to_entries[] | \"      - **\\(.key)**: \\(.value)\"\
+        )\n    - **Threshold Type**: \\(.tool.threshold.type)\n    - **Threshold Value**:\
+        \ \\(.tool.threshold.value)\n    - **Job**: \\(.tool.job)\n  - **Trigger**:\
+        \ \\(.trigger)\n  - **Type**: \\(.type | join(\", \"))\n  - **Orchestration\
+        \ Type**: \\(.orchestration_type)\n  - **Notification**: \\(.notification)\n\
+        \  - **Active**: \\(.active)\n  - **Updated At**: \\(.updatedAt)\n  - **Plan\
+        \ ID**: \\(.[\"_id\"])\n  - **Dependencies**: \\(.dependencies)\n  - **Tags**:\n\
+        \\(.tags[] | \"    - Type: \\(.type), Value: \\(.value)\")\")' >> scan-report.md"
+    - name: Commit and Push Report
+      env:
+        GH_PAT: ${{ secrets.GH_PAT }}
+      run: 'git config --global user.name "GitHub Actions"
 
-          logs='${{{{ needs.fetch-opsera-logs.outputs.logs }}}}'
+        git config --global user.email "actions@github.com"
 
-          echo "$logs" | jq -r '
-            .[] |
-            "- **Pipeline ID**: \(.pipeline_id)
-- **Run Count**: \(.run_count)
-- **User ID**: \(.user_id)
-- **Tool Identifier**: \(.tool_identifier)
-- **Step Name**: \(.step_name)
-- **Status**: \(.status)
-- **Action**: \(.action)
-- **Message**: \(.message)
-- **Created At**: \(.createdAt)
-- **Updated At**: \(.updatedAt)
+        git init
 
-### Step Configuration
-- **Tool**: \(.step_configuration.tool)
-\(.step_configuration.plan[] |
-  "  - **Plan Name**: \(.name)
-  - **Description**: \(.description)
-    - **Tool Identifier**: \(.tool.tool_identifier)
-    - **Configuration**:
-\(.tool.configuration | to_entries[] | "      - **\(.key)**: \(.value)")
-    - **Threshold Type**: \(.tool.threshold.type)
-    - **Threshold Value**: \(.tool.threshold.value)
-    - **Job**: \(.tool.job)
-  - **Trigger**: \(.trigger)
-  - **Type**: \(.type | join(", "))
-  - **Orchestration Type**: \(.orchestration_type)
-  - **Notification**: \(.notification)
-  - **Active**: \(.active)
-  - **Updated At**: \(.updatedAt)
-  - **Plan ID**: \(.["_id"])
-  - **Dependencies**: \(.dependencies)
-  - **Tags**:
-\(.tags[] | "    - Type: \(.type), Value: \(.value)")")"
-          ' >> scan-report.md
+        git remote add origin https://x-access-token:${GH_PAT}@github.com/${{ github.repository
+        }}
 
-      - name: Commit and Push Report
-        env:
-          GH_PAT: ${{{{ secrets.GH_PAT }}}}
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git init
-          git remote add origin https://x-access-token:${{{{ secrets.GH_PAT }}}}@github.com/${{{{ github.repository }}}}
-          git fetch origin
-          git checkout -b ${{{{ github.ref_name }}}} origin/${{{{ github.ref_name }}}}
-          git add scan-report.md
-          git commit -m "Add GitCustodian scan report" || echo "No changes to commit"
-          git push origin HEAD:${{{{ github.ref_name }}}}
+        git fetch origin
 
+        git checkout -b ${{ github.ref_name }} origin/${{ github.ref_name }}
+
+        git add scan-report.md
+
+        git commit -m "Add GitCustodian scan report" || echo "No changes to commit"
+
+        git push origin HEAD:${{ github.ref_name }}'
   comment-scan-result:
     needs: fetch-opsera-logs
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - name: Comment on GitHub Pull Request
-        run: |
-          logs='${{{{ needs.fetch-opsera-logs.outputs.logs }}}}'
-          body=$(echo "$logs" | jq -r '.[] | "- Message: \(.message)\n  - Status: \(.status)\n  - Action: \(.action)"')
-          curl -s -X POST             -H "Authorization: Bearer ${{{{ secrets.GITHUB_TOKEN }}}}"             -H "Content-Type: application/json"             -d "{"body": "### GitCustodian Scan Summary\n\n$body"}"             "https://api.github.com/repos/${{{{ github.repository }}}}/issues/${{{{ github.event.number }}}}/comments"
+    - name: Comment on GitHub Pull Request
+      run: 'logs=''${{ needs.fetch-opsera-logs.outputs.logs }}''
+
+        body=$(echo "$logs" | jq -r ''.[] | "- Message: \(.message)\n  - Status: \(.status)\n  -
+        Action: \(.action)"'')
+
+        curl -s -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H
+        "Content-Type: application/json" -d "{"body": "### GitCustodian Scan Summary\n\n$body"}"
+        "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.number
+        }}/comments"'
