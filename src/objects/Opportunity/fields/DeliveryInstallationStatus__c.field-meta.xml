@@ -7,6 +7,7 @@
     <trackTrending>false</trackTrending>
     <type>Picklist</type>
     <valueSet>
+        <controllingField>customfiled1__c</controllingField>
         <valueSetDefinition>
             <sorted>false</sorted>
             <value>
